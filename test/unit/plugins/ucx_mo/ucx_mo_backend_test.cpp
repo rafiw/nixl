@@ -23,9 +23,10 @@
 
 using namespace std;
 
-#ifdef USE_VRAM
+#ifdef HAVE_CUDA
 
 #include <cuda_runtime.h>
+#include <cuda.h>
 
 int gpu_id = 0;
 
@@ -99,7 +100,7 @@ void releaseEngine(nixlBackendEngine *ucx)
     delete ucx;
 }
 
-#ifdef USE_VRAM
+#ifdef HAVE_CUDA
 
 static int cudaQueryAddr(void *address, bool &is_dev,
                          CUdevice &dev, CUcontext &ctx)
@@ -137,7 +138,7 @@ void allocateBuffer(nixl_mem_t mem_type, int dev_id, size_t len, void* &addr)
         //addr = calloc(1, len);
         posix_memalign(&addr, 4096, len);
         break;
-#ifdef USE_VRAM
+#ifdef HAVE_CUDA
     case VRAM_SEG:{
         bool is_dev;
         CUdevice dev;
@@ -164,7 +165,7 @@ void releaseBuffer(nixl_mem_t mem_type, int dev_id, void* &addr)
     case DRAM_SEG:
         free(addr);
         break;
-#ifdef USE_VRAM
+#ifdef HAVE_CUDA
     case VRAM_SEG:
         checkCudaError(cudaSetDevice(dev_id), "Failed to set device");
         checkCudaError(cudaFree(addr), "Failed to allocate CUDA buffer 0");
@@ -182,7 +183,7 @@ void doMemset(nixl_mem_t mem_type, int dev_id, void *addr, char byte, size_t len
     case DRAM_SEG:
         memset(addr, byte, len);
         break;
-#ifdef USE_VRAM
+#ifdef HAVE_CUDA
     case VRAM_SEG:
         checkCudaError(cudaSetDevice(dev_id), "Failed to set device");
         checkCudaError(cudaMemset(addr, byte, len), "Failed to memset");
@@ -200,7 +201,7 @@ void *getValidationPtr(nixl_mem_t mem_type, void *addr, size_t len)
     case DRAM_SEG:
         return addr;
         break;
-#ifdef USE_VRAM
+#ifdef HAVE_CUDA
     case VRAM_SEG: {
         void *ptr = calloc(len, 1);
         checkCudaError(cudaMemcpy(ptr, addr, len, cudaMemcpyDeviceToHost), "Failed to memcpy");
@@ -218,7 +219,7 @@ void *releaseValidationPtr(nixl_mem_t mem_type, void *addr)
     switch(mem_type) {
     case DRAM_SEG:
         break;
-#ifdef USE_VRAM
+#ifdef HAVE_CUDA
     case VRAM_SEG:
         free(addr);
         break;
@@ -230,8 +231,27 @@ void *releaseValidationPtr(nixl_mem_t mem_type, void *addr)
     return NULL;
 }
 
+typedef int dev_distr_t(int idx, int max_idx, int cnt);
+
+int dev_distr_rr(int idx, int max_idx, int cnt)
+{
+    return idx % cnt;
+}
+
+int dev_distr_blk(int idx, int max_idx, int cnt)
+{
+    int block_size = max_idx / cnt;
+    int nblocks_plus_1 = max_idx % cnt;
+    if (idx < (block_size+1) * nblocks_plus_1) {
+        return idx / (block_size+1);
+    } else {
+        return nblocks_plus_1 + (idx - nblocks_plus_1 * (block_size+1)) / block_size;
+    }
+}
+
+
 void createLocalDescs(nixlBackendEngine *ucx, nixl_meta_dlist_t &descs,
-                      int dev_cnt,
+                      int dev_cnt, dev_distr_t dist_f,
                       int desc_cnt, size_t desc_size)
 {
 
@@ -242,7 +262,7 @@ void createLocalDescs(nixlBackendEngine *ucx, nixl_meta_dlist_t &descs,
         void *addr;
 
         desc.len = desc_size;
-        desc.devId = i % dev_cnt;
+        desc.devId = dist_f(i, desc_cnt, dev_cnt);
 
         allocateBuffer(descs.getType(), desc.devId, desc.len, addr);
         desc.addr = (uintptr_t)addr;
@@ -275,6 +295,8 @@ void createRemoteDescs(nixlBackendEngine *src_ucx,
                        nixlBackendEngine *dst_ucx,
                        nixl_meta_dlist_t &dst_descs)
 {
+    bool is_local = (src_ucx == dst_ucx);
+
     for(int i = 0; i < src_descs.descCount(); i++) {
         nixlBlobDesc desc_s;
         nixlMetaDesc desc_m;
@@ -282,10 +304,15 @@ void createRemoteDescs(nixlBackendEngine *src_ucx,
 
         *((nixlBasicDesc*)&desc_s) = (nixlBasicDesc)src_descs[i];
         *((nixlBasicDesc*)&desc_m) = (nixlBasicDesc)src_descs[i];
-        status = src_ucx->getPublicData(src_descs[i].metadataP, desc_s.metaInfo);
-        assert(NIXL_SUCCESS == status);
-        status = dst_ucx->loadRemoteMD (desc_s, src_descs.getType(),
-                                        agent, desc_m.metadataP);
+
+        if (is_local) {
+            status = dst_ucx->loadLocalMD(src_descs[i].metadataP, desc_m.metadataP);
+        } else {
+            status = src_ucx->getPublicData(src_descs[i].metadataP, desc_s.metaInfo);
+            assert(NIXL_SUCCESS == status);
+            status = dst_ucx->loadRemoteMD (desc_s, src_descs.getType(),
+                                            agent, desc_m.metadataP);
+        }
         assert(status == NIXL_SUCCESS);
         dst_descs.addDesc(desc_m);
     }
@@ -386,20 +413,26 @@ void performTransfer(nixlBackendEngine *ucx1, nixlBackendEngine *ucx2,
         releaseValidationPtr(req_src_descs.getType(), chkptr1);
         releaseValidationPtr(req_dst_descs.getType(), chkptr2);
     }
-    cout << "OK" << endl;
+    cout << "OK" << endl << flush;
 }
 
-void test_inter_agent_transfer(bool p_thread,
-                nixlBackendEngine *ucx1, nixl_mem_t src_mem_type, int src_dev_cnt,
-                nixlBackendEngine *ucx2, nixl_mem_t dst_mem_type, int dst_dev_cnt)
+void test_agent_transfer(bool p_thread,
+                nixlBackendEngine *ucx1, nixl_mem_t src_mem_type, int src_dev_cnt, dev_distr_t src_dist_f,
+                nixlBackendEngine *ucx2, nixl_mem_t dst_mem_type, int dst_dev_cnt, dev_distr_t dst_dist_f)
 {
     int iter = 10;
     nixl_status_t status;
+    bool is_local = (ucx1 == ucx2);
+
+    if (is_local) {
+        assert(ucx1->supportsLocal());
+    }
 
     std::cout << std::endl << std::endl;
     std::cout << "****************************************************" << std::endl;
-    std::cout << "    Inter-agent memory transfer test P-Thr=" <<
-                        (p_thread ? "ON" : "OFF") << std::endl;
+    std::cout << ((is_local) ? std::string("IntrA") : std::string("IntEr"))
+              << "-agent memory transfer test P-Thr="
+              << (p_thread ? "ON" : "OFF") << std::endl;
     std::cout << "         (" << memType2Str(src_mem_type) << " -> "
                 << memType2Str(dst_mem_type) << ")" << std::endl;
     std::cout << "****************************************************" << std::endl;
@@ -409,6 +442,7 @@ void test_inter_agent_transfer(bool p_thread,
     // with separate memory regions in DRAM
     std::string agent1("Agent1");
     std::string agent2("Agent2");
+    std::string *agent = &agent2;
 
     // We get the required connection info from UCX to be put on the central
     // location and ask for it for a remote node
@@ -421,7 +455,10 @@ void test_inter_agent_transfer(bool p_thread,
     assert(NIXL_SUCCESS == status);
 
     // We assumed we put them to central location and now receiving it on the other process
-    status = ucx1->loadRemoteConnInfo (agent2, conn_info2);
+    if (is_local) {
+        agent = &agent1;
+    }
+    status = ucx1->loadRemoteConnInfo (*agent, conn_info2);
     assert(NIXL_SUCCESS == status);
 
     // TODO: Causes race condition - investigate conn management implementation
@@ -430,16 +467,16 @@ void test_inter_agent_transfer(bool p_thread,
     std::cout << "Synchronous handshake complete\n";
 
     // Number of transfer descriptors
-    int desc_cnt = 16;
+    int desc_cnt = 128;
     // Size of a single descriptor
-    size_t desc_size = 32 * 1024 * 1024;
+    size_t desc_size = 512 * 1024;
     nixl_meta_dlist_t ucx1_src_descs (src_mem_type);
     nixl_meta_dlist_t ucx2_src_descs (dst_mem_type);
     nixl_meta_dlist_t ucx1_dst_descs (dst_mem_type);
 
-    createLocalDescs(ucx1, ucx1_src_descs, src_dev_cnt,
+    createLocalDescs(ucx1, ucx1_src_descs, src_dev_cnt, src_dist_f,
                      desc_cnt, desc_size);
-    createLocalDescs(ucx2, ucx2_src_descs, dst_dev_cnt,
+    createLocalDescs(ucx2, ucx2_src_descs, dst_dev_cnt, dst_dist_f,
                      desc_cnt, desc_size);
     createRemoteDescs(ucx2, agent2, ucx2_src_descs,
                       ucx1, ucx1_dst_descs);
@@ -474,12 +511,11 @@ void test_inter_agent_transfer(bool p_thread,
 
     for(int k = 0; k < iter; k++) {
         std::string test_str("test");
-        std::string tgt_agent("Agent2");
         notif_list_t target_notifs;
 
         cout << "\t gnNotif to Agent2" <<endl;
 
-        ucx1->genNotif(tgt_agent, test_str);
+        ucx1->genNotif(*agent, test_str);
 
         cout << "\t\tChecking notification flow: " << flush;
 
@@ -507,7 +543,7 @@ void test_inter_agent_transfer(bool p_thread,
     destroyLocalDescs(ucx2, ucx2_src_descs);
 
     // Test one-sided disconnect (initiator only)
-    ucx1->disconnect(agent2);
+    ucx1->disconnect(*agent);
 
     // TODO: Causes race condition - investigate conn management implementation
     //ucx2->disconnect(agent1);
@@ -522,7 +558,7 @@ int main()
 #define NUM_WORKERS 8
 
 int ndevices = NUM_WORKERS;
-#ifdef USE_VRAM
+#ifdef HAVE_CUDA
     int n_vram_dev;
     cudaGetDeviceCount(&n_vram_dev);
     std::cout << "Detected " << n_vram_dev << " CUDA devices" << std::endl;
@@ -539,23 +575,38 @@ int ndevices = NUM_WORKERS;
     }
 
     for(size_t i = 0; i < THREAD_ON_SIZE; i++) {
-        test_inter_agent_transfer(thread_on[i],
-                                ucx[i][0], DRAM_SEG, ndevices,
-                                ucx[i][1], DRAM_SEG, ndevices);
-#ifdef USE_VRAM
+        //Test local memory to local memory transfer
+        test_agent_transfer(thread_on[i],
+                            ucx[i][0], DRAM_SEG, ndevices, dev_distr_rr,
+                            ucx[i][0], DRAM_SEG, ndevices, dev_distr_blk);
+#ifdef HAVE_CUDA
         if (n_vram_dev) {
-            test_inter_agent_transfer(thread_on[i],
-                                    ucx[i][0], VRAM_SEG, n_vram_dev,
-                                    ucx[i][1], VRAM_SEG, n_vram_dev);
-            test_inter_agent_transfer(thread_on[i],
-                                    ucx[i][0], VRAM_SEG, n_vram_dev,
-                                    ucx[i][1], VRAM_SEG, n_vram_dev);
-            test_inter_agent_transfer(thread_on[i],
-                                    ucx[i][0], VRAM_SEG, n_vram_dev,
-                                    ucx[i][1], DRAM_SEG, n_vram_dev);
-            test_inter_agent_transfer(thread_on[i],
-                                    ucx[i][0], DRAM_SEG, n_vram_dev,
-                                    ucx[i][1], VRAM_SEG, n_vram_dev);
+            test_agent_transfer(thread_on[i],
+                                ucx[i][0], VRAM_SEG, ndevices, dev_distr_rr,
+                                ucx[i][0], VRAM_SEG, ndevices, dev_distr_blk);
+        }
+#endif
+    }
+
+    for(size_t i = 0; i < THREAD_ON_SIZE; i++) {
+        test_agent_transfer(thread_on[i],
+                            ucx[i][0], DRAM_SEG, ndevices, dev_distr_rr,
+                            ucx[i][1], DRAM_SEG, ndevices, dev_distr_blk);
+
+#ifdef HAVE_CUDA
+        if (n_vram_dev) {
+            test_agent_transfer(thread_on[i],
+                                ucx[i][0], VRAM_SEG, n_vram_dev, dev_distr_rr,
+                                ucx[i][1], VRAM_SEG, n_vram_dev, dev_distr_blk);
+            test_agent_transfer(thread_on[i],
+                                ucx[i][0], VRAM_SEG, n_vram_dev, dev_distr_rr,
+                                ucx[i][1], VRAM_SEG, n_vram_dev, dev_distr_blk);
+            test_agent_transfer(thread_on[i],
+                                ucx[i][0], VRAM_SEG, n_vram_dev, dev_distr_rr,
+                                ucx[i][1], DRAM_SEG, n_vram_dev, dev_distr_blk);
+            test_agent_transfer(thread_on[i],
+                                ucx[i][0], DRAM_SEG, n_vram_dev, dev_distr_rr,
+                                ucx[i][1], VRAM_SEG, n_vram_dev, dev_distr_blk);
         }
 #endif
     }
