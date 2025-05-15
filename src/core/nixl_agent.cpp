@@ -661,6 +661,7 @@ nixlAgent::createXferReq(const nixl_xfer_op_t &operation,
     NIXL_LOCK_GUARD(data->lock);
     if (data->remoteSections.count(remote_agent) == 0)
     {
+        delete backend_set;
         return NIXL_ERR_NOT_FOUND;
     }
 
@@ -884,6 +885,10 @@ nixlAgent::releaseXferReq(nixlXferReqH *req_hndl) const {
 nixl_status_t
 nixlAgent::releasedDlistH (nixlDlistH* dlist_hndl) const {
     NIXL_LOCK_GUARD(data->lock);
+    for (auto it = dlist_hndl->descs.begin(); it != dlist_hndl->descs.end(); ++it) {
+        delete it->second;
+        it = dlist_hndl->descs.erase(it);
+    }
     delete dlist_hndl;
     return NIXL_SUCCESS;
 }
@@ -925,9 +930,6 @@ nixlAgent::getNotifs(nixl_notifs_t &notif_map,
             continue;
 
         for (auto & elm: bknd_notif_list) {
-            if (notif_map.count(elm.first) == 0)
-                notif_map[elm.first] = std::vector<nixl_blob_t>();
-
             notif_map[elm.first].push_back(elm.second);
         }
     }
@@ -1321,10 +1323,12 @@ nixlAgent::checkRemoteMD (const std::string remote_name,
             return NIXL_SUCCESS;
         } else {
             nixl_meta_dlist_t dummy(descs.getType(), descs.isSorted());
-            for (const auto& [backend, conn_info] : data->remoteBackends[remote_name])
-                if (data->remoteSections[remote_name]->populate(
-                          descs, data->backendEngines[backend], dummy) == NIXL_SUCCESS)
-                    return NIXL_SUCCESS;
+            if (auto it = data->remoteBackends.find(remote_name); it != data->remoteBackends.end()) {
+                for (const auto& [backend, conn_info] : it->second)
+                    if (data->remoteSections[remote_name]->populate(
+                              descs, data->backendEngines[backend], dummy) == NIXL_SUCCESS)
+                        return NIXL_SUCCESS;
+            }
             dummy.clear();
         }
     }
