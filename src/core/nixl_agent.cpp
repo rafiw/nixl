@@ -885,7 +885,7 @@ nixlAgent::releaseXferReq(nixlXferReqH *req_hndl) const {
 nixl_status_t
 nixlAgent::releasedDlistH (nixlDlistH* dlist_hndl) const {
     NIXL_LOCK_GUARD(data->lock);
-    for (auto it = dlist_hndl->descs.begin(); it != dlist_hndl->descs.end(); ++it) {
+    for (auto it = dlist_hndl->descs.begin(); it != dlist_hndl->descs.end();) {
         delete it->second;
         it = dlist_hndl->descs.erase(it);
     }
@@ -1323,11 +1323,13 @@ nixlAgent::checkRemoteMD (const std::string remote_name,
             return NIXL_SUCCESS;
         } else {
             nixl_meta_dlist_t dummy(descs.getType(), descs.isSorted());
-            if (auto it = data->remoteBackends.find(remote_name); it != data->remoteBackends.end()) {
+            auto it = data->remoteBackends.find(remote_name);
+            if (it != data->remoteBackends.end()) {
                 for (const auto& [backend, conn_info] : it->second)
-                    if (data->remoteSections[remote_name]->populate(
-                              descs, data->backendEngines[backend], dummy) == NIXL_SUCCESS)
-                        return NIXL_SUCCESS;
+                    if (data->backendEngines.count(backend) != 0)
+                        if (data->remoteSections[remote_name]->populate(
+                            descs, data->backendEngines[backend], dummy) == NIXL_SUCCESS)
+                            return NIXL_SUCCESS;
             }
             dummy.clear();
         }
