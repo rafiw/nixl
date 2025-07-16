@@ -27,13 +27,26 @@
 #include <cstdlib>
 #include <memory>
 #include <errno.h>
+#include <gflags/gflags.h>
 
 
 namespace fs = std::filesystem;
 
 #include "common/cyclic_buffer.h"
 #include "nixl_types.h"
+#ifdef NIXL_ENABLE_DOCA
+#include "doca_exporter.h"
+#endif // NIXL_ENABLE_DOCA
+#include "telemetry_exporter.h"
 
+// GFlags definitions
+DEFINE_string(telemetry_path, "/tmp/", "Path to the telemetry folder");
+DEFINE_bool(read_any_file, false, "Read telemetry data from any file (not only active process)");
+DEFINE_string(exporter, "", "Exporter to use (doca)");
+#ifdef NIXL_ENABLE_DOCA
+DEFINE_string(doca_source_id, "", "DOCA source ID (auto-generated if not specified)");
+DEFINE_string(doca_source_tag, "nixl_telemetry", "DOCA source tag");
+#endif // NIXL_ENABLE_DOCA
 volatile bool g_running = true;
 
 // Signal handler for Ctrl+C
@@ -156,36 +169,83 @@ look_for_stat_active_telemetry_files(const std::string &telemetry_path, bool rea
     return "";
 }
 
-void
-usage() {
-    std::cout << "Usage: telemetry_reader_example <telemetry_folder_path> <read any file>"
-              << std::endl;
-    std::cout << "Options:" << std::endl;
-    std::cout << "  <telemetry_folder_path>    Path to the telemetry folder" << std::endl;
-    std::cout << "  <read any file>            Read telemetry data from any file (not only active "
-                 "process) in the folder (0 - false, 1 - true, default: 0)"
-              << std::endl;
-    exit(0);
+struct Config {
+    std::string telemetry_path;
+    bool read_any_file;
+    std::string type;
+    std::string otlp_endpoint;
+    Protocol otlp_protocol;
+    std::string otlp_service_name;
+    std::string doca_source_id;
+    std::string doca_source_tag;
+    size_t doca_buffer_size;
+};
+
+Config
+parse_arguments(int argc, char *argv[]) {
+    // Parse gflags
+    gflags::ParseCommandLineFlags(&argc, &argv, true);
+
+    Config config;
+
+    // Get other values from gflags
+    config.telemetry_path = FLAGS_telemetry_path;
+    config.type = FLAGS_exporter;
+    config.read_any_file = FLAGS_read_any_file;
+#ifdef NIXL_ENABLE_DOCA
+    config.doca_source_id = FLAGS_doca_source_id;
+    config.doca_source_tag = FLAGS_doca_source_tag;
+#endif // NIXL_ENABLE_DOCA
+    return config;
+}
+
+
+std::unique_ptr<TelemetryExporter>
+initialize_exporter(const Config &config) {
+    std::unique_ptr<TelemetryExporter> exporter;
+#ifdef NIXL_ENABLE_DOCA
+    if (config.type == "doca") {
+        std::cout << "Initializing DOCA exporter..." << std::endl;
+        auto schema_name = fs::path(config.telemetry_path).filename().string();
+        std::cout << "  Schema: " << schema_name << std::endl;
+        std::cout << "  Source ID: "
+                  << (config.doca_source_id.empty() ? "auto-generated" : config.doca_source_id)
+                  << std::endl;
+        std::cout << "  Source Tag: " << config.doca_source_tag << std::endl;
+        exporter = std::make_unique<DocaExporter>(
+            schema_name, config.doca_source_id, config.doca_source_tag, TELEMETRY_BUFFER_SIZE);
+        if (!exporter->isInitialized()) {
+            std::cerr << "Failed to initialize DOCA exporter" << std::endl;
+            return nullptr;
+        }
+    }
+#endif // NIXL_ENABLE_DOCA
+    return exporter;
 }
 
 int
 main(int argc, char *argv[]) {
-    if (argc < 2 || argv[1] == std::string("-h") || argv[1] == std::string("--help")) {
-        usage();
-    }
+    Config config = parse_arguments(argc, argv);
 
-    std::cout << "Telemetry path: " << argv[1] << std::endl;
-    auto read_any_file = false;
-    if (argc > 2) {
-        read_any_file = std::stoi(argv[2]);
-    }
-    auto telemetry_path = argv[1];
-    auto telemetry_file_name = look_for_stat_active_telemetry_files(telemetry_path, read_any_file);
+    std::cout << "Telemetry path: " << config.telemetry_path << std::endl;
+    std::cout << "Read any file: " << (config.read_any_file ? "true" : "false") << std::endl;
+
+    auto telemetry_file_name =
+        look_for_stat_active_telemetry_files(config.telemetry_path, config.read_any_file);
     if (telemetry_file_name.empty()) {
         std::cerr << "No active telemetry files found" << std::endl;
         return 1;
     }
+    config.telemetry_path = telemetry_file_name;
 
+    // Initialize exporter based on configuration
+    std::unique_ptr<TelemetryExporter> exporter = initialize_exporter(config);
+
+    if (!exporter) {
+        std::cerr << "Failed to initialize exporter" << std::endl;
+    }
+    nixlTelemetryEvent event = {};
+    std::cout << "event size: " << sizeof(event) - sizeof(event.backend_telemetry) << std::endl;
     // Set up signal handler for Ctrl+C
     signal(SIGINT, signal_handler);
 
@@ -201,14 +261,20 @@ main(int argc, char *argv[]) {
                   << ")" << std::endl;
         std::cout << "Buffer size: " << buffer.size() << " events" << std::endl;
 
-        nixlTelemetryEvent event = {};
         uint64_t event_count = 0;
+        uint64_t export_count = 0;
 
         while (g_running) {
             // Try to read an event from the buffer
             if (buffer.pop(event)) {
                 event_count++;
-                print_telemetry_event(event);
+                // Export to exporter if configured
+                if (exporter && exporter->exportEvent(event)) {
+                    std::cout << "Exported event " << event_count << std::endl;
+                    export_count++;
+                } else {
+                    print_telemetry_event(event);
+                }
             } else {
                 // No events available, sleep briefly
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -216,12 +282,18 @@ main(int argc, char *argv[]) {
         }
 
         std::cout << "\nTotal events read: " << event_count << std::endl;
+        if (exporter) {
+            std::cout << "Total events exported: " << export_count << std::endl;
+        }
         std::cout << "Final buffer size: " << buffer.size() << " events" << std::endl;
     }
     catch (const std::exception &e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
+
+    // Cleanup gflags
+    gflags::ShutDownCommandLineFlags();
 
     return 0;
 }

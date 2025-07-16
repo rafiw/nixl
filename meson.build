@@ -132,6 +132,23 @@ if get_option('enable_telemetry')
     add_project_arguments('-DNIXL_ENABLE_TELEMETRY', language: 'cpp')
 endif
 
+# Configure DOCA telemetry
+doca_dep = []
+if get_option('enable_doca_exporter')
+    add_project_arguments('-DNIXL_ENABLE_DOCA', language: 'cpp')
+
+    # Check for DOCA telemetry dependency
+    doca_telemetry_dep = dependency('doca-telemetry-exporter', required: false)
+
+    if doca_telemetry_dep.found()
+        doca_dep = [doca_telemetry_dep]
+        message('DOCA telemetry export enabled')
+    else
+        message('DOCA telemetry library not found, DOCA export disabled')
+        add_project_arguments('-DNIXL_ENABLE_DOCA=0', language: 'cpp')
+    endif
+endif
+
 # Configure NDEBUG for release builds
 if get_option('buildtype') == 'release'
     # Used by Abseil to strip DCHECK assertions and DVLOG at compile time

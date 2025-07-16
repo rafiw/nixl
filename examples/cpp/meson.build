@@ -29,8 +29,18 @@ if etcd_dep.found()
                install: true)
 endif
 
+# GFlags dependency
+gflags_dep = dependency('gflags', required: true)
+
 telemetry_reader_example = executable('telemetry_reader_example',
-           'telemetry_reader_example.cpp',
-           dependencies: [nixl_dep, nixl_common_deps],
+           ['telemetry_reader_example.cpp', 'doca_exporter.cpp'],
+           dependencies: [nixl_dep, nixl_common_deps, doca_dep, gflags_dep],
+           include_directories: [nixl_inc_dirs, utils_inc_dirs],
+           cpp_args: ['-Wno-deprecated-declarations'],
+           install: true)
+
+telemetry_generator_example = executable('telemetry_generator_example',
+           'telemetry_generator_example.cpp',
+           dependencies: [nixl_dep, nixl_common_deps, gflags_dep],
            include_directories: [nixl_inc_dirs, utils_inc_dirs],
            install: true)

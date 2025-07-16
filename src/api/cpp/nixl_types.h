@@ -178,7 +178,7 @@ struct nixlTelemetryEvent {
     uint32_t tx_requests_num;
     uint32_t rx_requests_num;
     uint64_t memory_registered;
-    uint16_t num_backends;
+    uint8_t num_backends;
     uint64_t total_transaction_time_us; // Cumulative transaction time in microseconds
     uint32_t last_requests_time_us[LAST_REQUESTS_ARRAY_SIZE]; // Last requests time in microseconds
     uint32_t error_counts[std::abs(
