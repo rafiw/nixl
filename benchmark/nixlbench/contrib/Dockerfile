@@ -111,7 +111,6 @@ ARG WHL_PYTHON_VERSIONS="3.12"
 ARG WHL_PLATFORM="manylinux_2_39_$ARCH"
 ARG BUILD_TYPE="release"
 ARG NPROC
-ARG ENABLE_TELEMETRY="true"
 
 WORKDIR /workspace
 RUN git clone --depth 1 https://github.com/etcd-cpp-apiv3/etcd-cpp-apiv3.git && \
@@ -144,7 +143,7 @@ RUN uv venv $VIRTUAL_ENV --python $DEFAULT_PYTHON_VERSION && \
 
 RUN rm -rf build && \
     mkdir build && \
-    uv run meson setup build/ --prefix=/usr/local/nixl --buildtype=$BUILD_TYPE -Denable_telemetry=${ENABLE_TELEMETRY} && \
+    uv run meson setup build/ --prefix=/usr/local/nixl --buildtype=$BUILD_TYPE && \
     cd build && \
     ninja && \
     ninja install
