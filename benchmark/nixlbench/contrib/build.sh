@@ -34,8 +34,6 @@ if [ -z ${latest_tag} ]; then
     echo "No git release tag found, setting to unknown version: ${latest_tag}"
 fi
 
-ENABLE_TELEMETRY="false"
-
 BASE_IMAGE=nvcr.io/nvidia/cuda-dl-base
 BASE_IMAGE_TAG=25.03-cuda12.8-devel-ubuntu24.04
 ARCH=$(uname -m)
@@ -127,14 +125,6 @@ get_options() {
             if [ "$2" ]; then
                 ARCH=$2
                 WHL_PLATFORM=${WHL_BASE}_${ARCH}
-                shift
-            else
-                missing_requirement $1
-            fi
-            ;;
-        --enable-telemetry)
-            if [ "$2" ]; then
-                ENABLE_TELEMETRY=$2
                 shift
             else
                 missing_requirement $1
