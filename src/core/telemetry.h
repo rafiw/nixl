@@ -47,11 +47,6 @@ public:
 
     ~nixlTelemetry();
 
-    bool
-    isEnabled() const {
-        return enabled_;
-    }
-
     void
     updateTxBytes(uint64_t tx_bytes);
     void
@@ -83,7 +78,6 @@ private:
     std::mutex mutex_;
     asio::thread_pool pool_;
     periodicTask writeTask_;
-    bool enabled_;
     std::string file_;
     backend_map_t &backendMap_;
 };

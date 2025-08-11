@@ -40,6 +40,7 @@ class nixlBackendEngine {
         // Members that can be accessed by the child (localAgent cannot be modified)
         bool              initErr = false;
         const std::string localAgent;
+        bool enableTelemetry_;
 
         [[nodiscard]] nixl_status_t
         setInitParam(const std::string &key, const std::string &value) {
@@ -60,6 +61,8 @@ class nixlBackendEngine {
 
         void
         addTelemetryEvent(const std::string &event_name, uint64_t value) {
+            if (!enableTelemetry_) return;
+            if (telemetryEvents_.size() >= 1000) return;
             std::lock_guard<std::mutex> lock(telemetryEventsMutex_);
             telemetryEvents_.emplace_back(std::chrono::duration_cast<std::chrono::microseconds>(
                                               std::chrono::system_clock::now().time_since_epoch())
@@ -70,11 +73,11 @@ class nixlBackendEngine {
         }
 
     public:
-        explicit nixlBackendEngine (const nixlBackendInitParams* init_params)
+        explicit nixlBackendEngine(const nixlBackendInitParams *init_params)
             : backendType(init_params->type),
               customParams(*init_params->customParams),
-              localAgent(init_params->localAgent) {
-        }
+              localAgent(init_params->localAgent),
+              enableTelemetry_(init_params->enableTelemetry_) {}
 
         nixlBackendEngine(nixlBackendEngine&&) = delete;
         nixlBackendEngine(const nixlBackendEngine&) = delete;

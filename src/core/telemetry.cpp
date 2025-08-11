@@ -42,14 +42,7 @@ nixlTelemetry::nixlTelemetry(const std::string &name, backend_map_t &backend_map
     if (name.empty()) {
         throw std::invalid_argument("Telemetry file name cannot be empty");
     }
-    enabled_ = std::getenv(TELEMETRY_ENABLED_VAR) != nullptr;
-
-    if (enabled_) {
-        initializeTelemetry();
-        return;
-    }
-
-    NIXL_INFO << "Telemetry disabled via " << TELEMETRY_ENABLED_VAR << " environment variable";
+    initializeTelemetry();
 }
 
 nixlTelemetry::~nixlTelemetry() {
@@ -99,8 +92,6 @@ nixlTelemetry::initializeTelemetry() {
 
 bool
 nixlTelemetry::writeEventHelper() {
-    if (!enabled_) return false;
-
     std::vector<nixlTelemetryEvent> next_queue;
     // assume next buffer will be the same size as the current one
     next_queue.reserve(buffer_->capacity());
@@ -164,7 +155,6 @@ void
 nixlTelemetry::updateData(const std::string &event_name,
                           nixl_telemetry_category_t category,
                           uint64_t value) {
-    if (!enabled_) return;
     nixlTelemetryEvent event(std::chrono::duration_cast<std::chrono::microseconds>(
                                  std::chrono::system_clock::now().time_since_epoch())
                                  .count(),
