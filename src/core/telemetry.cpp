@@ -105,7 +105,7 @@ nixlTelemetry::writeEventHelper() {
     for (auto &backend : backendMap_) {
         auto backend_events = backend.second->getTelemetryEvents();
         for (auto &event : backend_events) {
-            // don't trust enum value comming from backend,
+            // don't trust enum value coming from backend,
             // as it might be different from the one in agent
             event.category_ = nixl_telemetry_category_t::NIXL_TELEMETRY_BACKEND;
             all_events.push_back(event);
@@ -212,10 +212,17 @@ nixlTelemetry::updateMemoryDeregistered(uint64_t memory_deregistered) {
 }
 
 void
-nixlTelemetry::addTransactionTime(std::chrono::microseconds transaction_time) {
-    updateData("agent_transaction_time",
+nixlTelemetry::addXferTime(std::chrono::microseconds xfer_time) {
+    updateData("agent_xfer_time",
                nixl_telemetry_category_t::NIXL_TELEMETRY_PERFORMANCE,
-               transaction_time.count());
+               xfer_time.count());
+}
+
+void
+nixlTelemetry::addPostTime(std::chrono::microseconds post_time) {
+    updateData("agent_xfer_post_time",
+               nixl_telemetry_category_t::NIXL_TELEMETRY_PERFORMANCE,
+               post_time.count());
 }
 
 std::string

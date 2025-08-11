@@ -36,13 +36,13 @@
 #include "mocks/gmock_engine.h"
 
 namespace fs = std::filesystem;
+constexpr char TELEMETRY_ENABLED_VAR[] = "NIXL_TELEMETRY_ENABLE";
 
 // Custom mock backend class for testing backend telemetry events
 class telemetryTestBackend : public mocks::GMockBackendEngine {
 public:
-    telemetryTestBackend(bool enable_telemetry = true) : mocks::GMockBackendEngine() {
-        enableTelemetry_ = enable_telemetry;
-    }
+    telemetryTestBackend(const nixlBackendInitParams *init_params)
+        : mocks::GMockBackendEngine(init_params) {}
 
     void
     addTestTelemetryEvent(const std::string &event_name, uint64_t value) {
@@ -147,7 +147,7 @@ TEST_F(telemetryTest, TransferBytesTracking) {
     EXPECT_NO_THROW(telemetry.updateErrorCount(nixl_status_t::NIXL_ERR_BACKEND));
     EXPECT_NO_THROW(telemetry.updateMemoryRegistered(1024));
     EXPECT_NO_THROW(telemetry.updateMemoryDeregistered(1024));
-    EXPECT_NO_THROW(telemetry.addTransactionTime(std::chrono::microseconds(100)));
+    EXPECT_NO_THROW(telemetry.addXferTime(std::chrono::microseconds(100)));
 
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
     auto path = fs::path(testDir_) / testFile_;
@@ -182,7 +182,7 @@ TEST_F(telemetryTest, TransferBytesTracking) {
     EXPECT_STREQ(event.eventName_, "agent_memory_deregistered");
     EXPECT_EQ(event.value_, 1024);
     buffer->pop(event);
-    EXPECT_STREQ(event.eventName_, "agent_transaction_time");
+    EXPECT_STREQ(event.eventName_, "agent_xfer_time");
     EXPECT_EQ(event.value_, 100);
     buffer->pop(event);
     envHelper_.popVar();
@@ -231,7 +231,7 @@ TEST_F(telemetryTest, CustomTelemetryDirectory) {
 
     EXPECT_NO_THROW({
         nixlTelemetry telemetry(testFile_, backendMap_);
-        
+
         fs::path telemetry_file = custom_dir / testFile_;
         EXPECT_TRUE(fs::exists(telemetry_file));
     });
@@ -299,10 +299,13 @@ TEST_F(telemetryTest, ConcurrentAccess) {
 
 TEST_F(telemetryTest, BackendTelemetryEventsCollection) {
     envHelper_.addVar(TELEMETRY_RUN_INTERVAL_VAR, "1");
-
+    nixlBackendInitParams init_params;
+    init_params.enableTelemetry_ = true;
+    nixl_b_params_t custom_params;
+    init_params.customParams = &custom_params;
     // Create mock backends and add them to the backend map
-    auto mock_backend1 = std::make_unique<telemetryTestBackend>();
-    auto mock_backend2 = std::make_unique<telemetryTestBackend>();
+    auto mock_backend1 = std::make_unique<telemetryTestBackend>(&init_params);
+    auto mock_backend2 = std::make_unique<telemetryTestBackend>(&init_params);
 
     backendMap_["CUSTOM"] = mock_backend1.get();
     backendMap_["GPUNETIO"] = mock_backend2.get();
@@ -379,7 +382,11 @@ TEST_F(telemetryTest, BackendTelemetryEventsEmptyBackendMap) {
 TEST_F(telemetryTest, BackendTelemetryEventsMixedWithAgentEvents) {
     envHelper_.addVar(TELEMETRY_RUN_INTERVAL_VAR, "1");
 
-    auto mock_backend = std::make_unique<telemetryTestBackend>();
+    nixlBackendInitParams init_params;
+    nixl_b_params_t custom_params;
+    init_params.customParams = &custom_params;
+    init_params.enableTelemetry_ = true;
+    auto mock_backend = std::make_unique<telemetryTestBackend>(&init_params);
     backendMap_["CUSTOM"] = mock_backend.get();
 
     nixlTelemetry telemetry(testFile_, backendMap_);
@@ -427,7 +434,11 @@ TEST_F(telemetryTest, BackendTelemetryEventsDisabledTelemetry) {
     // Disable telemetry
     unsetenv(TELEMETRY_ENABLED_VAR);
 
-    auto mock_backend = std::make_unique<telemetryTestBackend>(false);
+    nixlBackendInitParams init_params;
+    nixl_b_params_t custom_params;
+    init_params.customParams = &custom_params;
+    init_params.enableTelemetry_ = false;
+    auto mock_backend = std::make_unique<telemetryTestBackend>(&init_params);
     backendMap_["CUSTOM"] = mock_backend.get();
 
     nixlTelemetry telemetry(testFile_, backendMap_);
@@ -452,9 +463,13 @@ TEST_F(telemetryTest, BackendTelemetryEventsMultipleBackends) {
     envHelper_.addVar(TELEMETRY_RUN_INTERVAL_VAR, "1");
 
     // Create multiple mock backends
-    auto mock_backend1 = std::make_unique<telemetryTestBackend>();
-    auto mock_backend2 = std::make_unique<telemetryTestBackend>();
-    auto mock_backend3 = std::make_unique<telemetryTestBackend>();
+    nixlBackendInitParams init_params;
+    nixl_b_params_t custom_params;
+    init_params.customParams = &custom_params;
+    init_params.enableTelemetry_ = true;
+    auto mock_backend1 = std::make_unique<telemetryTestBackend>(&init_params);
+    auto mock_backend2 = std::make_unique<telemetryTestBackend>(&init_params);
+    auto mock_backend3 = std::make_unique<telemetryTestBackend>(&init_params);
 
     backendMap_["CUSTOM"] = mock_backend1.get();
     backendMap_["GPUNETIO"] = mock_backend2.get();

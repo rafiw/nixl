@@ -40,7 +40,7 @@ class nixlBackendEngine {
         // Members that can be accessed by the child (localAgent cannot be modified)
         bool              initErr = false;
         const std::string localAgent;
-        bool enableTelemetry_;
+        const bool enableTelemetry_;
 
         [[nodiscard]] nixl_status_t
         setInitParam(const std::string &key, const std::string &value) {

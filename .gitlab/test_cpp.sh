@@ -78,6 +78,7 @@ cd ${INSTALL_DIR}
 ./bin/nixl_etcd_example
 ./bin/ucx_backend_test
 ./bin/ucx_mo_backend_test
+./bin/telemetry_reader
 
 # POSIX test disabled until we solve io_uring and Docker compatibility
 

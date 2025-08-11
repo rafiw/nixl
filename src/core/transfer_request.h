@@ -63,7 +63,7 @@ class nixlXferReqH {
         }
 
         void
-        updateRequestStats(std::unique_ptr<nixlTelemetry> &telemetry);
+        updateRequestStats(std::unique_ptr<nixlTelemetry> &telemetry, bool during_post);
 
         friend class nixlAgent;
 };

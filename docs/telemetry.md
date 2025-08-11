@@ -37,14 +37,6 @@ The telemetry system supports the following event categories:
 
 ## Enabling Telemetry
 
-### Compile-Time Configuration
-
-Telemetry can be enabled at compile time using the `enable_telemetry` meson option:
-
-```bash
-meson setup builddir -Denable_telemetry=true
-```
-
 ### Runtime Configuration
 
 Telemetry is controlled by environment variables:
@@ -65,13 +57,13 @@ Telemetry data is stored in shared memory files with the agent name passed when 
 
 ### C++ Telemetry Reader
 
-The C++ telemetry reader (`telemetry_reader_example.cpp`) provides a robust way to read and display telemetry events.
+The C++ telemetry reader (`telemetry_reader.cpp`) provides a robust way to read and display telemetry events.
 
 #### Running the C++ Reader
 
 ```bash
 # Read from a specific telemetry file
-./builddir/examples/cpp/telemetry_reader_example /tmp/agent_name
+./builddir/examples/cpp/telemetry_reader /tmp/agent_name
 ```
 
 ### Python Telemetry Reader
