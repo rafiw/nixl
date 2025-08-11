@@ -148,7 +148,6 @@ RUN rm -rf build && \
     ninja && \
     ninja install
 
-RUN cp build/examples/cpp/telemetry_reader_example /usr/local/bin
 ENV NIXL_PLUGIN_DIR=/usr/local/nixl/lib/$ARCH-linux-gnu/plugins
 RUN echo "/usr/local/nixl/lib/$ARCH-linux-gnu" > /etc/ld.so.conf.d/nixl.conf && \
     echo "/usr/local/nixl/lib/$ARCH-linux-gnu/plugins" >> /etc/ld.so.conf.d/nixl.conf && \
@@ -187,7 +186,7 @@ RUN ls -ll benchmark/kvbench
 # Install dependencies for benchmarks
 RUN uv pip install -e benchmark/kvbench
 
-ENV PATH=/usr/local/nixlbench/bin:$PATH
+ENV PATH=/usr/local/nixlbench/bin:/usr/local/nixl/bin:$PATH
 ENV LD_LIBRARY_PATH=/usr/local/nixlbench/lib:$LD_LIBRARY_PATH
 ENV PYTHON_PATH=/usr/local/nixlbench/lib/python3/dist-packages/nixlbench/
 

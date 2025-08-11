@@ -90,7 +90,7 @@ print_telemetry_event(const nixlTelemetryEvent &event) {
 
 void
 usage() {
-    std::cout << "Usage: telemetry_reader_example <telemetry_file_path>" << std::endl;
+    std::cout << "Usage: telemetry_reader <telemetry_file_path>" << std::endl;
     std::cout << "Options:" << std::endl;
     std::cout << "  <telemetry_file_path>    Path to the telemetry file" << std::endl;
     exit(0);
