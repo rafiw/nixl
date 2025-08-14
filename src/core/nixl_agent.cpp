@@ -83,29 +83,29 @@ nixlEnumStrings::statusStr(const nixl_status_t &status) {
 
 inline void
 nixlXferReqH::updateRequestStats(std::unique_ptr<nixlTelemetry> &telemetry_pub,
-                                 nixl_telemetry_post_status_t during_post) {
+                                 nixl_telemetry_stat_status_t  stat_status) {
     assert(telemetry_pub != nullptr);
 
     static const std::array<std::string, 3> nixl_post_status_str = {
-        "Posted", "Posted and Completed", "Completed"};
+        " Posted", " Posted and Completed", " Completed"};
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now() - telemetry.startTime);
 
-    if (during_post == NIXL_TELEMETRY_POST) {
+    if (stat_status == NIXL_TELEMETRY_POST) {
         telemetry.postDuration_ = duration;
-    } else if (during_post == NIXL_TELEMETRY_POST_AND_FINISH) {
+    } else if (stat_status == NIXL_TELEMETRY_POST_AND_FINISH) {
         telemetry.postDuration_ = duration;
         telemetry.xferDuration_ = duration;
         telemetry_pub->addPostTime(duration);
         telemetry_pub->addXferTime(duration, backendOp == NIXL_WRITE, telemetry.totalBytes);
-    } else if (during_post == NIXL_TELEMETRY_FINISH) {
+    } else if (stat_status == NIXL_TELEMETRY_FINISH) {
         telemetry.xferDuration_ = duration;
         telemetry_pub->addPostTime(telemetry.postDuration_);
         telemetry_pub->addXferTime(duration, backendOp == NIXL_WRITE, telemetry.totalBytes);
     }
 
     NIXL_TRACE << "[NIXL TELEMETRY]: From backend " << engine->getType()
-               << nixl_post_status_str[during_post] << " Xfer with " << initiatorDescs->descCount()
+               << nixl_post_status_str[stat_status] << " Xfer with " << initiatorDescs->descCount()
                << " descriptors of total size " << telemetry.totalBytes << "B in "
                << duration.count() << "us.";
 }

@@ -29,7 +29,7 @@
 using chrono_point_t = std::chrono::steady_clock::time_point;
 using std::chrono::microseconds;
 
-enum nixl_telemetry_post_status_t {
+enum nixl_telemetry_stat_status_t {
     NIXL_TELEMETRY_POST = 0,
     NIXL_TELEMETRY_POST_AND_FINISH = 1,
     NIXL_TELEMETRY_FINISH = 2
@@ -72,7 +72,7 @@ class nixlXferReqH {
 
         void
         updateRequestStats(std::unique_ptr<nixlTelemetry> &telemetry,
-                           nixl_telemetry_post_status_t during_post);
+                           nixl_telemetry_stat_status_t stat_status);
 
         friend class nixlAgent;
 };
