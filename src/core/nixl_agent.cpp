@@ -81,33 +81,33 @@ nixlEnumStrings::statusStr(const nixl_status_t &status) {
     }
 }
 
-void
+inline void
 nixlXferReqH::updateRequestStats(std::unique_ptr<nixlTelemetry> &telemetry_pub,
-                                 bool during_post) {
+                                 nixl_telemetry_post_status_t during_post) {
     assert(telemetry_pub != nullptr);
-    std::string dbg_msg;
 
+    static const std::array<std::string, 3> nixl_post_status_str = {
+        "Posted", "Posted and Completed", "Completed"};
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::high_resolution_clock::now() - telemetry.startTime);
+        std::chrono::steady_clock::now() - telemetry.startTime);
 
-    if (during_post) {
-        if (status == NIXL_SUCCESS) {
-            dbg_msg = "Posted and Completed";
-        } else {
-            dbg_msg = "Posted";
-        }
-        this->telemetry.postDuration_ = duration;
+    if (during_post == NIXL_TELEMETRY_POST) {
+        telemetry.postDuration_ = duration;
+    } else if (during_post == NIXL_TELEMETRY_POST_AND_FINISH) {
+        telemetry.postDuration_ = duration;
+        telemetry.xferDuration_ = duration;
         telemetry_pub->addPostTime(duration);
-    } else {
-        dbg_msg = "Completed";
-    }
-    if (status == NIXL_SUCCESS) {
-        this->telemetry.xferDuration_ = duration;
+        telemetry_pub->addXferTime(duration, backendOp == NIXL_WRITE, telemetry.totalBytes);
+    } else if (during_post == NIXL_TELEMETRY_FINISH) {
+        telemetry.xferDuration_ = duration;
+        telemetry_pub->addPostTime(telemetry.postDuration_);
         telemetry_pub->addXferTime(duration, backendOp == NIXL_WRITE, telemetry.totalBytes);
     }
-    NIXL_DEBUG << "[NIXL TELEMETRY]: From backend " << engine->getType() << dbg_msg << " Xfer with "
-               << initiatorDescs->descCount() << " descriptors of total size "
-               << telemetry.totalBytes << "B in " << duration.count() << "us.";
+
+    NIXL_TRACE << "[NIXL TELEMETRY]: From backend " << engine->getType()
+               << nixl_post_status_str[during_post] << " Xfer with " << initiatorDescs->descCount()
+               << " descriptors of total size " << telemetry.totalBytes << "B in "
+               << duration.count() << "us.";
 }
 
 /*** nixlAgentData constructor/destructor, as part of nixlAgent's ***/
@@ -937,7 +937,7 @@ nixlAgent::postXferReq(nixlXferReqH *req_hndl,
         return NIXL_ERR_INVALID_PARAM;
     }
 
-    if (data->telemetry_) req_hndl->telemetry.startTime = std::chrono::high_resolution_clock::now();
+    if (data->telemetry_) req_hndl->telemetry.startTime = std::chrono::steady_clock::now();
 
     NIXL_SHARED_LOCK_GUARD(data->lock);
     // Check if the remote was invalidated before post/repost
@@ -1002,10 +1002,12 @@ nixlAgent::postXferReq(nixlXferReqH *req_hndl,
     }
 
     if (data->telemetry_) {
-        if (req_hndl->status == NIXL_SUCCESS) {
-            req_hndl->updateRequestStats(data->telemetry_, true);
-        } else if (req_hndl->status < 0) {
+        if (req_hndl->status < 0) {
             data->telemetry_->updateErrorCount(req_hndl->status);
+        } else if (req_hndl->status == NIXL_IN_PROG) {
+            req_hndl->updateRequestStats(data->telemetry_, NIXL_TELEMETRY_POST);
+        } else {
+            req_hndl->updateRequestStats(data->telemetry_, NIXL_TELEMETRY_POST_AND_FINISH);
         }
     }
 
@@ -1017,7 +1019,6 @@ nixlAgent::getXferStatus (nixlXferReqH *req_hndl) const {
 
     NIXL_SHARED_LOCK_GUARD(data->lock);
     // If the status is done, no need to recheck.
-    if (req_hndl->status == NIXL_SUCCESS) return NIXL_SUCCESS;
     if (req_hndl->status == NIXL_IN_PROG) {
         // Check if the remote was invalidated before completion
         if (data->remoteSections.count(req_hndl->remoteAgent) == 0) {
@@ -1033,7 +1034,7 @@ nixlAgent::getXferStatus (nixlXferReqH *req_hndl) const {
         }
         if (data->telemetry_) {
             if (req_hndl->status == NIXL_SUCCESS) {
-                req_hndl->updateRequestStats(data->telemetry_, false);
+                req_hndl->updateRequestStats(data->telemetry_, NIXL_TELEMETRY_FINISH);
             } else if (req_hndl->status < 0) {
                 data->telemetry_->updateErrorCount(req_hndl->status);
             }
