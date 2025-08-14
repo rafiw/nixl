@@ -96,19 +96,14 @@ nixlXferReqH::updateRequestStats(std::unique_ptr<nixlTelemetry> &telemetry_pub,
         } else {
             dbg_msg = "Posted";
         }
+        this->telemetry.postDuration_ = duration;
         telemetry_pub->addPostTime(duration);
     } else {
         dbg_msg = "Completed";
     }
     if (status == NIXL_SUCCESS) {
-        telemetry_pub->addXferTime(duration);
-        if (backendOp == NIXL_WRITE) {
-            telemetry_pub->updateTxBytes(telemetry.totalBytes);
-            telemetry_pub->updateTxRequestsNum(1);
-        } else {
-            telemetry_pub->updateRxBytes(telemetry.totalBytes);
-            telemetry_pub->updateRxRequestsNum(1);
-        }
+        this->telemetry.xferDuration_ = duration;
+        telemetry_pub->addXferTime(duration, backendOp == NIXL_WRITE, telemetry.totalBytes);
     }
     NIXL_DEBUG << "[NIXL TELEMETRY]: From backend " << engine->getType() << dbg_msg << " Xfer with "
                << initiatorDescs->descCount() << " descriptors of total size "
@@ -1007,10 +1002,10 @@ nixlAgent::postXferReq(nixlXferReqH *req_hndl,
     }
 
     if (data->telemetry_) {
-        if (req_hndl->status < 0) {
-            data->telemetry_->updateErrorCount(req_hndl->status);
-        } else {
+        if (req_hndl->status == NIXL_SUCCESS) {
             req_hndl->updateRequestStats(data->telemetry_, true);
+        } else if (req_hndl->status < 0) {
+            data->telemetry_->updateErrorCount(req_hndl->status);
         }
     }
 
@@ -1022,6 +1017,7 @@ nixlAgent::getXferStatus (nixlXferReqH *req_hndl) const {
 
     NIXL_SHARED_LOCK_GUARD(data->lock);
     // If the status is done, no need to recheck.
+    if (req_hndl->status == NIXL_SUCCESS) return NIXL_SUCCESS;
     if (req_hndl->status == NIXL_IN_PROG) {
         // Check if the remote was invalidated before completion
         if (data->remoteSections.count(req_hndl->remoteAgent) == 0) {
@@ -1035,13 +1031,12 @@ nixlAgent::getXferStatus (nixlXferReqH *req_hndl) const {
             delete req_hndl;
             return NIXL_ERR_REMOTE_DISCONNECT;
         }
-    } else {
-        if (data->telemetry_) {
-            if (req_hndl->status < 0) {
-                data->telemetry_->updateErrorCount(req_hndl->status);
-            } else {
-                req_hndl->updateRequestStats(data->telemetry_, false);
-            }
+    }
+    if (data->telemetry_) {
+        if (req_hndl->status == NIXL_SUCCESS) {
+            req_hndl->updateRequestStats(data->telemetry_, false);
+        } else if (req_hndl->status < 0) {
+            data->telemetry_->updateErrorCount(req_hndl->status);
         }
     }
 

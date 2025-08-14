@@ -147,13 +147,13 @@ TEST_F(telemetryTest, TransferBytesTracking) {
     EXPECT_NO_THROW(telemetry.updateErrorCount(nixl_status_t::NIXL_ERR_BACKEND));
     EXPECT_NO_THROW(telemetry.updateMemoryRegistered(1024));
     EXPECT_NO_THROW(telemetry.updateMemoryDeregistered(1024));
-    EXPECT_NO_THROW(telemetry.addXferTime(std::chrono::microseconds(100)));
+    EXPECT_NO_THROW(telemetry.addXferTime(std::chrono::microseconds(100), true, 2000));
 
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
     auto path = fs::path(testDir_) / testFile_;
     auto buffer = std::make_unique<sharedRingBuffer<nixlTelemetryEvent>>(
         path.string(), false, TELEMETRY_VERSION);
-    EXPECT_EQ(buffer->size(), 8);
+    EXPECT_EQ(buffer->size(), 10);
     EXPECT_EQ(buffer->version(), TELEMETRY_VERSION);
     EXPECT_EQ(buffer->capacity(), capacity_);
     EXPECT_EQ(buffer->empty(), false);
@@ -185,6 +185,11 @@ TEST_F(telemetryTest, TransferBytesTracking) {
     EXPECT_STREQ(event.eventName_, "agent_xfer_time");
     EXPECT_EQ(event.value_, 100);
     buffer->pop(event);
+    EXPECT_STREQ(event.eventName_, "agent_tx_bytes");
+    EXPECT_EQ(event.value_, 2000);
+    buffer->pop(event);
+    EXPECT_STREQ(event.eventName_, "agent_tx_requests_num");
+    EXPECT_EQ(event.value_, 1);
     envHelper_.popVar();
 }
 

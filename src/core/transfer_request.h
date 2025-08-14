@@ -48,6 +48,8 @@ class nixlXferReqH {
 
         struct {
             chrono_point_t startTime;
+            std::chrono::microseconds postDuration_ = std::chrono::microseconds(0);
+            std::chrono::microseconds xferDuration_ = std::chrono::microseconds(0);
             size_t totalBytes;
         } telemetry;
 

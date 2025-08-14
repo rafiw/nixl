@@ -155,16 +155,14 @@ void
 nixlTelemetry::updateData(const std::string &event_name,
                           nixl_telemetry_category_t category,
                           uint64_t value) {
-    nixlTelemetryEvent event(std::chrono::duration_cast<std::chrono::microseconds>(
-                                 std::chrono::system_clock::now().time_since_epoch())
-                                 .count(),
-                             category,
-                             event_name,
-                             value);
-
     // agent can be multi-threaded
     std::lock_guard<std::mutex> lock(mutex_);
-    events_.push_back(event);
+    events_.emplace_back(std::chrono::duration_cast<std::chrono::microseconds>(
+                             std::chrono::system_clock::now().time_since_epoch())
+                             .count(),
+                         category,
+                         event_name,
+                         value);
 }
 
 void
@@ -212,10 +210,32 @@ nixlTelemetry::updateMemoryDeregistered(uint64_t memory_deregistered) {
 }
 
 void
-nixlTelemetry::addXferTime(std::chrono::microseconds xfer_time) {
-    updateData("agent_xfer_time",
-               nixl_telemetry_category_t::NIXL_TELEMETRY_PERFORMANCE,
-               xfer_time.count());
+nixlTelemetry::addXferTime(std::chrono::microseconds xfer_time, bool is_write, uint64_t bytes) {
+    std::string bytes_name;
+    std::string requests_name;
+
+    if (is_write) {
+        bytes_name = "agent_tx_bytes";
+        requests_name = "agent_tx_requests_num";
+    } else {
+        bytes_name = "agent_rx_bytes";
+        requests_name = "agent_rx_requests_num";
+    }
+    auto time = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    std::lock_guard<std::mutex> lock(mutex_);
+    events_.emplace_back(time,
+                         nixl_telemetry_category_t::NIXL_TELEMETRY_PERFORMANCE,
+                         "agent_xfer_time",
+                         xfer_time.count());
+    events_.emplace_back(time,
+        nixl_telemetry_category_t::NIXL_TELEMETRY_TRANSFER,
+        bytes_name.c_str(),
+        bytes);
+    events_.emplace_back(time,
+        nixl_telemetry_category_t::NIXL_TELEMETRY_TRANSFER,
+        requests_name.c_str(),
+        1);
 }
 
 void
