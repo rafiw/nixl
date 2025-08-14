@@ -1031,12 +1031,12 @@ nixlAgent::getXferStatus (nixlXferReqH *req_hndl) const {
             delete req_hndl;
             return NIXL_ERR_REMOTE_DISCONNECT;
         }
-    }
-    if (data->telemetry_) {
-        if (req_hndl->status == NIXL_SUCCESS) {
-            req_hndl->updateRequestStats(data->telemetry_, false);
-        } else if (req_hndl->status < 0) {
-            data->telemetry_->updateErrorCount(req_hndl->status);
+        if (data->telemetry_) {
+            if (req_hndl->status == NIXL_SUCCESS) {
+                req_hndl->updateRequestStats(data->telemetry_, false);
+            } else if (req_hndl->status < 0) {
+                data->telemetry_->updateErrorCount(req_hndl->status);
+            }
         }
     }
 
