@@ -86,3 +86,11 @@ python3 blocking_send_recv_example.py --mode="initiator" --ip=127.0.0.1 --port="
 python3 query_mem_example.py
 
 pkill etcd
+
+echo "==== Test Python Telemetry Reader ===="
+NIXL_TELEMETRY_ENABLE=1 python3 examples/python/nixl_api_example.py &
+sleep 1
+python3 examples/python/telemetry_reader.py --telemetry_path /tmp/target &
+telePID=$!
+sleep 10
+kill -s SIGINT $telePID
