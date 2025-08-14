@@ -62,7 +62,7 @@ public:
     void
     updateMemoryDeregistered(uint64_t memory_deregistered);
     void
-    addXferTime(std::chrono::microseconds transaction_time);
+    addXferTime(std::chrono::microseconds transaction_time, bool is_write, uint64_t bytes);
     void
     addPostTime(std::chrono::microseconds post_time);
 
