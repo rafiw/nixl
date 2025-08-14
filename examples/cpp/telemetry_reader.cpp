@@ -34,13 +34,12 @@ namespace fs = std::filesystem;
 #include "common/cyclic_buffer.h"
 #include "telemetry_event.h"
 
-volatile bool g_running = true;
+volatile sig_atomic_t g_running = true;
 
 // Signal handler for Ctrl+C
 void
 signal_handler(int signal) {
     if (signal == SIGINT) {
-        std::cout << "\nReceived Ctrl+C, shutting down..." << std::endl;
         g_running = false;
     }
 }

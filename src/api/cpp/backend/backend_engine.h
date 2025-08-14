@@ -27,6 +27,8 @@
 #include "backend_aux.h"
 #include "telemetry_event.h"
 
+constexpr size_t MAX_TELEMETRY_QUEUE_SIZE = 1000;
+
 // Base backend engine class for different backend implementations
 class nixlBackendEngine {
     private:
@@ -62,7 +64,7 @@ class nixlBackendEngine {
         void
         addTelemetryEvent(const std::string &event_name, uint64_t value) {
             if (!enableTelemetry_) return;
-            if (telemetryEvents_.size() >= 1000) return;
+            if (telemetryEvents_.size() >= MAX_TELEMETRY_QUEUE_SIZE) return;
             std::lock_guard<std::mutex> lock(telemetryEventsMutex_);
             telemetryEvents_.emplace_back(std::chrono::duration_cast<std::chrono::microseconds>(
                                               std::chrono::system_clock::now().time_since_epoch())
