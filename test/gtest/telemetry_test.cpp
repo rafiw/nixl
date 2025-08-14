@@ -319,7 +319,9 @@ TEST_F(telemetryTest, BackendTelemetryEventsCollection) {
 
     // Add some telemetry events to the backends
     mock_backend1->addTestTelemetryEvent("backend1_event1", 100);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
     mock_backend1->addTestTelemetryEvent("backend1_event2", 200);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
     mock_backend2->addTestTelemetryEvent("backend2_event1", 300);
 
     // Wait for the telemetry to be written
