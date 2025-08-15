@@ -18,12 +18,21 @@
 import argparse
 import ctypes
 import errno
+import logging
 import mmap
 import os
 import signal
 import sys
 import time
 from datetime import datetime
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 # Constants from telemetry_event.h
 TELEMETRY_VERSION = 1
@@ -48,7 +57,7 @@ def signal_handler(signum, frame):
     """Signal handler for Ctrl+C"""
     global running
     if signum == signal.SIGINT:
-        print("\nReceived Ctrl+C, shutting down...")
+        logger.info("\nReceived Ctrl+C, shutting down...")
         running = False
 
 
@@ -126,7 +135,7 @@ class SharedRingBuffer:
             )
 
         self.buffer_size = temp_header.capacity
-        print(f"Auto-detected buffer size: {self.buffer_size}")
+        logger.info(f"Auto-detected buffer size: {self.buffer_size}")
 
         del temp_header
         header_mmap.close()
@@ -230,17 +239,17 @@ def get_telemetry_category_string(category):
 
 def print_telemetry_event(event):
     """Print telemetry event in a formatted way"""
-    print("\n=== NIXL Telemetry Event ===")
-    print(f"Timestamp: {format_timestamp(event.timestamp_us)}")
+    logger.info("\n=== NIXL Telemetry Event ===")
+    logger.info(f"Timestamp: {format_timestamp(event.timestamp_us)}")
 
     # Decode event name
     event_name = event.event_name.decode("utf-8").rstrip("\x00")
     category_str = get_telemetry_category_string(event.category)
 
-    print(f"Category: {category_str}")
-    print(f"Event: {event_name}")
-    print(f"Value: {event.value}")
-    print("===========================")
+    logger.info(f"Category: {category_str}")
+    logger.info(f"Event: {event_name}")
+    logger.info(f"Value: {event.value}")
+    logger.info("===========================")
 
 
 def main():
@@ -252,24 +261,24 @@ def main():
 
     args = parser.parse_args()
 
-    print(f"Telemetry path: {args.telemetry_path}")
+    logger.info(f"Telemetry path: {args.telemetry_path}")
     telemetry_file_name = args.telemetry_path
     if not os.path.exists(telemetry_file_name):
-        print(f"Telemetry file {telemetry_file_name} does not exist")
+        logger.error(f"Telemetry file {telemetry_file_name} does not exist")
         return 1
 
     signal.signal(signal.SIGINT, signal_handler)
 
     try:
-        print(f"Opening telemetry buffer: {telemetry_file_name}")
-        print("Press Ctrl+C to stop reading telemetry...")
+        logger.info(f"Opening telemetry buffer: {telemetry_file_name}")
+        logger.info("Press Ctrl+C to stop reading telemetry...")
 
         buffer = SharedRingBuffer(telemetry_file_name, version=TELEMETRY_VERSION)
 
-        print(f"Successfully opened telemetry buffer (version: {buffer.get_version()})")
-        print(f"Buffer capacity: {buffer.get_capacity()} events")
-        print(f"Current events in buffer: {buffer.size()}")
-        print(f"Event structure size: {ctypes.sizeof(NixlTelemetryEvent)} bytes")
+        logger.info(f"Successfully opened telemetry buffer (version: {buffer.get_version()})")
+        logger.info(f"Buffer capacity: {buffer.get_capacity()} events")
+        logger.info(f"Current events in buffer: {buffer.size()}")
+        logger.info(f"Event structure size: {ctypes.sizeof(NixlTelemetryEvent)} bytes")
 
         event_count = 0
 
@@ -283,11 +292,11 @@ def main():
                 # No events available, sleep briefly
                 time.sleep(0.1)
 
-        print(f"\nTotal events read: {event_count}")
-        print(f"Final buffer size: {buffer.size()} events")
+        logger.info(f"\nTotal events read: {event_count}")
+        logger.info(f"Final buffer size: {buffer.size()} events")
 
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
         return 1
 
     return 0

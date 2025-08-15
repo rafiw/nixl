@@ -222,20 +222,17 @@ nixlTelemetry::addXferTime(std::chrono::microseconds xfer_time, bool is_write, u
         requests_name = "agent_rx_requests_num";
     }
     auto time = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                    std::chrono::system_clock::now().time_since_epoch())
+                    .count();
     std::lock_guard<std::mutex> lock(mutex_);
     events_.emplace_back(time,
                          nixl_telemetry_category_t::NIXL_TELEMETRY_PERFORMANCE,
                          "agent_xfer_time",
                          xfer_time.count());
-    events_.emplace_back(time,
-        nixl_telemetry_category_t::NIXL_TELEMETRY_TRANSFER,
-        bytes_name.c_str(),
-        bytes);
-    events_.emplace_back(time,
-        nixl_telemetry_category_t::NIXL_TELEMETRY_TRANSFER,
-        requests_name.c_str(),
-        1);
+    events_.emplace_back(
+        time, nixl_telemetry_category_t::NIXL_TELEMETRY_TRANSFER, bytes_name.c_str(), bytes);
+    events_.emplace_back(
+        time, nixl_telemetry_category_t::NIXL_TELEMETRY_TRANSFER, requests_name.c_str(), 1);
 }
 
 void
