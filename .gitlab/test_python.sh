@@ -88,9 +88,11 @@ python3 query_mem_example.py
 pkill etcd
 
 echo "==== Test Python Telemetry Reader ===="
-NIXL_TELEMETRY_ENABLE=1 python3 examples/python/nixl_api_example.py &
+export NIXL_TELEMETRY_RUN_INTERVAL=10
+NIXL_TELEMETRY_ENABLE=1 python3 nixl_api_example.py &
 sleep 1
-python3 examples/python/telemetry_reader.py --telemetry_path /tmp/target &
+python3 telemetry_reader.py --telemetry_path /tmp/initiator &
 telePID=$!
-sleep 10
+sleep 6
 kill -s SIGINT $telePID
+

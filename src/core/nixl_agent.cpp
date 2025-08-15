@@ -135,7 +135,7 @@ nixlAgentData::nixlAgentData(const std::string &name, const nixlAgentConfig &cfg
     if (telemetry_enabled) {
         telemetry_ = std::make_unique<nixlTelemetry>(name, backendEngines);
     } else if (telemetry_env_val != nullptr) {
-        NIIXL_WARN << "Invalid NIXL_TELEMETRY_ENABLE environment variable, not enabling telemetry.";
+        NIXL_WARN << "Invalid NIXL_TELEMETRY_ENABLE environment variable, not enabling telemetry.";
     }
 }
 
@@ -182,7 +182,6 @@ nixlAgent::nixlAgent(const std::string &name, const nixlAgentConfig &cfg) :
 }
 
 nixlAgent::~nixlAgent() {
-
     if (data && (data->useEtcd || data->config.useListenThread)) {
         data->commThreadStop = true;
         if(data->commThread.joinable()) data->commThread.join();

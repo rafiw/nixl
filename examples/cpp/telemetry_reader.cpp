@@ -77,6 +77,8 @@ format_bytes(uint64_t bytes) {
 
 void
 print_telemetry_event(const nixlTelemetryEvent &event) {
+    // Can be extended to more general ostream if needed
+    // friend std::ostream &operator<<(std::ostream &os, const nixlTelemetryEvent &event)
     std::cout << "\n=== NIXL Telemetry Event ===" << std::endl;
     std::cout << "Timestamp: " << format_timestamp(event.timestampUs_) << std::endl;
     std::cout << "Category: " << nixlEnumStrings::telemetryCategoryStr(event.category_)
