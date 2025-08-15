@@ -95,7 +95,10 @@ nixlTelemetry::writeEventHelper() {
     std::vector<nixlTelemetryEvent> next_queue;
     // assume next buffer will be the same size as the current one
     next_queue.reserve(buffer_->capacity());
-    events_.swap(next_queue);
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        events_.swap(next_queue);
+    }
     for (auto &event : next_queue) {
         // if full, ignore
         buffer_->push(event);
