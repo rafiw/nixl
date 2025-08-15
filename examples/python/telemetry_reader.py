@@ -29,8 +29,8 @@ from datetime import datetime
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
 
@@ -275,7 +275,9 @@ def main():
 
         buffer = SharedRingBuffer(telemetry_file_name, version=TELEMETRY_VERSION)
 
-        logger.info(f"Successfully opened telemetry buffer (version: {buffer.get_version()})")
+        logger.info(
+            f"Successfully opened telemetry buffer (version: {buffer.get_version()})"
+        )
         logger.info(f"Buffer capacity: {buffer.get_capacity()} events")
         logger.info(f"Current events in buffer: {buffer.size()}")
         logger.info(f"Event structure size: {ctypes.sizeof(NixlTelemetryEvent)} bytes")

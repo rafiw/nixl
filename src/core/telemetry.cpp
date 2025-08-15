@@ -165,6 +165,7 @@ nixlTelemetry::updateData(const std::string &event_name,
                          value);
 }
 
+// The next 4 methods might be removed, as addXferTime covers them.
 void
 nixlTelemetry::updateTxBytes(uint64_t tx_bytes) {
     updateData("agent_tx_bytes", nixl_telemetry_category_t::NIXL_TELEMETRY_TRANSFER, tx_bytes);

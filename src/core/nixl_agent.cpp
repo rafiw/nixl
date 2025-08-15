@@ -98,7 +98,7 @@ nixlXferReqH::updateRequestStats(std::unique_ptr<nixlTelemetry> &telemetry_pub,
         telemetry.xferDuration_ = duration;
         telemetry_pub->addPostTime(duration);
         telemetry_pub->addXferTime(duration, backendOp == NIXL_WRITE, telemetry.totalBytes);
-    } else if (stat_status == NIXL_TELEMETRY_FINISH) {
+    } else { // stat_status == NIXL_TELEMETRY_FINISH
         telemetry.xferDuration_ = duration;
         telemetry_pub->addPostTime(telemetry.postDuration_);
         telemetry_pub->addXferTime(duration, backendOp == NIXL_WRITE, telemetry.totalBytes);
@@ -134,8 +134,8 @@ nixlAgentData::nixlAgentData(const std::string &name, const nixlAgentConfig &cfg
                                telemetry_env_val[0] == '1'));
     if (telemetry_enabled) {
         telemetry_ = std::make_unique<nixlTelemetry>(name, backendEngines);
-    } else {
-        NIXL_INFO << "Telemetry disabled via " << TELEMETRY_ENABLED_VAR << " environment variable";
+    } else if (telemetry_env_val != nullptr) {
+        NIIXL_WARN << "Invalid NIXL_TELEMETRY_ENABLE environment variable, not enabling telemetry.";
     }
 }
 
@@ -1018,7 +1018,8 @@ nixl_status_t
 nixlAgent::getXferStatus (nixlXferReqH *req_hndl) const {
 
     NIXL_SHARED_LOCK_GUARD(data->lock);
-    // If the status is done, no need to recheck.
+    // If the status is done, no need to recheck and no state changes.
+    // Same for users incorrectly recalling this method in error/done.
     if (req_hndl->status == NIXL_IN_PROG) {
         // Check if the remote was invalidated before completion
         if (data->remoteSections.count(req_hndl->remoteAgent) == 0) {
