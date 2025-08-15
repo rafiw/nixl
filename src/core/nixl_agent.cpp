@@ -83,7 +83,7 @@ nixlEnumStrings::statusStr(const nixl_status_t &status) {
 
 inline void
 nixlXferReqH::updateRequestStats(std::unique_ptr<nixlTelemetry> &telemetry_pub,
-                                 nixl_telemetry_stat_status_t  stat_status) {
+                                 nixl_telemetry_stat_status_t stat_status) {
     assert(telemetry_pub != nullptr);
 
     static const std::array<std::string, 3> nixl_post_status_str = {
