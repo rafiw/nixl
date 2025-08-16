@@ -134,6 +134,7 @@ nixlAgentData::nixlAgentData(const std::string &name, const nixlAgentConfig &cfg
                                telemetry_env_val[0] == '1'));
     if (telemetry_enabled) {
         telemetry_ = std::make_unique<nixlTelemetry>(name, backendEngines);
+        std::cout << "CI Sanity check, telemetry is enabled.\n";
     } else if (telemetry_env_val != nullptr) {
         NIXL_WARN << "Invalid NIXL_TELEMETRY_ENABLE environment variable, not enabling telemetry.";
     }
